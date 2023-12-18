@@ -564,7 +564,38 @@ static bool should_stay_in_bootloader()
 	return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
 }
 
-static void network_deinit()
+int __attribute__((weak)) picowota_network_init()
+{
+	if (cyw43_arch_init()) {
+		DBG_PRINTF("failed to initialise\n");
+		return 1;
+	}
+
+#if PICOWOTA_WIFI_AP == 1
+	cyw43_arch_enable_ap_mode(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK);
+	DBG_PRINTF("Enabled the WiFi AP.\n");
+
+	ip4_addr_t gw, mask;
+	IP4_ADDR(&gw, 192, 168, 4, 1);
+	IP4_ADDR(&mask, 255, 255, 255, 0);
+
+	dhcp_server_init(&dhcp_server, &gw, &mask);
+	DBG_PRINTF("Started the DHCP server.\n");
+#else
+	cyw43_arch_enable_sta_mode();
+
+	DBG_PRINTF("Connecting to WiFi...\n");
+	if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+		DBG_PRINTF("failed to connect.\n");
+		return 1;
+	} else {
+		DBG_PRINTF("Connected.\n");
+	}
+#endif
+	return 0;
+}
+
+void __attribute__((weak)) picowota_network_deinit()
 {
 #if PICOWOTA_WIFI_AP == 1
 	dhcp_server_deinit(&dhcp_server);
@@ -593,33 +624,10 @@ int main()
 
 	queue_init(&event_queue, sizeof(struct event), EVENT_QUEUE_LENGTH);
 
-	if (cyw43_arch_init()) {
-		DBG_PRINTF("failed to initialise\n");
-		return 1;
+	int n = picowota_network_init();
+	if (n != 0) {
+		return n;
 	}
-
-#if PICOWOTA_WIFI_AP == 1
-	cyw43_arch_enable_ap_mode(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK);
-	DBG_PRINTF("Enabled the WiFi AP.\n");
-
-	ip4_addr_t gw, mask;
-	IP4_ADDR(&gw, 192, 168, 4, 1);
-	IP4_ADDR(&mask, 255, 255, 255, 0);
-
-	dhcp_server_t dhcp_server;
-	dhcp_server_init(&dhcp_server, &gw, &mask);
-	DBG_PRINTF("Started the DHCP server.\n");
-#else
-	cyw43_arch_enable_sta_mode();
-
-	DBG_PRINTF("Connecting to WiFi...\n");
-	if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-		DBG_PRINTF("failed to connect.\n");
-		return 1;
-	} else {
-		DBG_PRINTF("Connected.\n");
-	}
-#endif
 
 	critical_section_init(&critical_section);
 
@@ -655,13 +663,13 @@ int main()
 				break;
 			case EVENT_TYPE_REBOOT:
 				tcp_comm_server_close(tcp);
-				network_deinit();
+				picowota_network_deinit();
 				picowota_reboot(ev.reboot.to_bootloader);
 				/* Should never get here */
 				break;
 			case EVENT_TYPE_GO:
 				tcp_comm_server_close(tcp);
-				network_deinit();
+				picowota_network_deinit();
 				disable_interrupts();
 				reset_peripherals();
 				jump_to_vtor(ev.go.vtor);
@@ -674,6 +682,6 @@ int main()
 		sleep_ms(5);
 	}
 
-	network_deinit();
+	picowota_network_deinit();
 	return 0;
 }

@@ -37,6 +37,7 @@ add_executable(picowota
 	main.c
 	tcp_comm.c
 	dhcpserver/dhcpserver.c
+	${PICOWOTA_ADDITIONAL_SOURCES}
 )
 
 function(target_cl_options option)
@@ -54,7 +55,9 @@ pico_add_extra_outputs(picowota)
 
 target_include_directories(picowota PRIVATE
 	${CMAKE_CURRENT_LIST_DIR} # Needed so that lwip can find lwipopts.h
-	${CMAKE_CURRENT_LIST_DIR}/dhcpserver)
+	${CMAKE_CURRENT_LIST_DIR}/dhcpserver
+	${PICOWOTA_ADDITIONAL_INCLUDES}
+)
 
 pico_enable_stdio_usb(picowota 1)
 
@@ -71,6 +74,7 @@ target_link_libraries(picowota
 	pico_sync
 	pico_util
 	picowota_reboot
+	${PICOWOTA_ADDITIONAL_LIBS}
 )
 
 # Retrieves build variables from the environment if present
@@ -100,6 +104,8 @@ endif ()
 # be better.
 target_compile_definitions(picowota PUBLIC PICOWOTA_WIFI_SSID=${PICOWOTA_WIFI_SSID})
 target_compile_definitions(picowota PUBLIC PICOWOTA_WIFI_PASS=${PICOWOTA_WIFI_PASS})
+
+target_compile_definitions(picowota PUBLIC PICOWOTA)
 
 # Use the WiFi AP mode upon request
 if (PICOWOTA_WIFI_AP)
