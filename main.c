@@ -679,7 +679,6 @@ int main()
 		}
 
 		cyw43_arch_poll();
-		sleep_ms(5);
 	}
 
 	picowota_network_deinit();
