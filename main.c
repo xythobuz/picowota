@@ -603,6 +603,11 @@ void __attribute__((weak)) picowota_network_deinit()
 	cyw43_arch_deinit();
 }
 
+void __attribute__((weak)) picowota_poll(void)
+{
+	cyw43_arch_poll();
+}
+
 int main()
 {
 	err_t err;
@@ -678,7 +683,7 @@ int main()
 			};
 		}
 
-		cyw43_arch_poll();
+		picowota_poll();
 	}
 
 	picowota_network_deinit();
