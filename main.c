@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2022 Brian Starkey <stark3y@gmail.com>
+ * Copyright (c) 2023 Thomas Buck <thomas@xythobuz.de>
  *
  * Based on the Pico W tcp_server example:
  * Copyright (c) 2022 Raspberry Pi (Trading) Ltd.
@@ -32,12 +33,8 @@
 
 #ifdef DEBUG
 #include <stdio.h>
+#include <stdarg.h>
 #include "pico/stdio_usb.h"
-#define DBG_PRINTF_INIT() stdio_usb_init()
-#define DBG_PRINTF(...) printf(__VA_ARGS__)
-#else
-#define DBG_PRINTF_INIT() { }
-#define DBG_PRINTF(...) { }
 #endif
 
 #if PICOWOTA_WIFI_AP == 1
@@ -108,8 +105,32 @@ struct image_header app_image_header;
 #define CMD_GO     (('G' << 0) | ('O' << 8) | ('G' << 16) | ('O' << 24))
 #define CMD_REBOOT (('B' << 0) | ('O' << 8) | ('O' << 16) | ('T' << 24))
 
+static uint32_t last_print_state = 0;
+
+void __attribute__((weak)) picowota_printf_init(void)
+{
+#ifdef DEBUG
+	stdio_usb_init();
+#endif
+}
+
+void __attribute__((weak)) picowota_printf(const char* format, ...)
+{
+#ifdef DEBUG
+	va_list args;
+	va_start(args, format);
+	vprintf(format, args);
+	va_end(args);
+#endif
+}
+
 static uint32_t handle_sync(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_args_out, uint8_t *resp_data_out)
 {
+	if (last_print_state != CMD_SYNC) {
+		picowota_printf("sync cmd\n");
+		last_print_state = CMD_SYNC;
+	}
+
 	return RSP_SYNC;
 }
 
@@ -140,6 +161,11 @@ static uint32_t handle_read(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_
 {
 	uint32_t addr = args_in[0];
 	uint32_t size = args_in[1];
+
+	if (last_print_state != CMD_READ) {
+		picowota_printf("read cmd 0x%08X %d\n", addr, size);
+		last_print_state = CMD_READ;
+	}
 
 	memcpy(resp_data_out, (void *)addr, size);
 
@@ -179,6 +205,11 @@ static uint32_t handle_csum(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_
 	uint32_t dummy_dest;
 	uint32_t addr = args_in[0];
 	uint32_t size = args_in[1];
+
+	if (last_print_state != CMD_CSUM) {
+		picowota_printf("csum cmd 0x%08X %d\n", addr, size);
+		last_print_state = CMD_CSUM;
+	}
 
 	int channel = dma_claim_unused_channel(true);
 
@@ -269,6 +300,11 @@ static uint32_t handle_crc(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_a
 	uint32_t addr = args_in[0];
 	uint32_t size = args_in[1];
 
+	if (last_print_state != CMD_CRC) {
+		picowota_printf("crc cmd 0x%08X %d\n", addr, size);
+		last_print_state = CMD_CRC;
+	}
+
 	resp_args_out[0] = calc_crc32((void *)addr, size);
 
 	return TCP_COMM_RSP_OK;
@@ -288,6 +324,11 @@ static uint32_t handle_erase(uint32_t *args_in, uint8_t *data_in, uint32_t *resp
 {
 	uint32_t addr = args_in[0];
 	uint32_t size = args_in[1];
+
+	if (last_print_state != CMD_ERASE) {
+		picowota_printf("erase cmd 0x%08X %d\n", addr, size);
+		last_print_state = CMD_ERASE;
+	}
 
 	if ((addr < ERASE_ADDR_MIN) || (addr + size >= FLASH_ADDR_MAX)) {
 		// Outside flash
@@ -348,6 +389,11 @@ static uint32_t handle_write(uint32_t *args_in, uint8_t *data_in, uint32_t *resp
 	uint32_t addr = args_in[0];
 	uint32_t size = args_in[1];
 
+	if (last_print_state != CMD_WRITE) {
+		picowota_printf("write cmd 0x%08X %d\n", addr, size);
+		last_print_state = CMD_WRITE;
+	}
+
 	critical_section_enter_blocking(&critical_section);
 	flash_range_program(addr - XIP_BASE, data_in, size);
 	critical_section_exit(&critical_section);
@@ -403,6 +449,11 @@ static bool image_header_ok(struct image_header *hdr)
 
 static uint32_t handle_seal(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_args_out, uint8_t *resp_data_out)
 {
+	if (last_print_state != CMD_SEAL) {
+		picowota_printf("seal cmd\n");
+		last_print_state = CMD_SEAL;
+	}
+
 	struct image_header hdr = {
 		.vtor = args_in[0],
 		.size = args_in[1],
@@ -477,6 +528,11 @@ static void jump_to_vtor(uint32_t vtor)
 
 static uint32_t handle_go(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_args_out, uint8_t *resp_data_out)
 {
+	if (last_print_state != CMD_GO) {
+		picowota_printf("go cmd\n");
+		last_print_state = CMD_GO;
+	}
+
 	struct event ev = {
 		.type = EVENT_TYPE_GO,
 		.go = {
@@ -503,6 +559,11 @@ struct comm_command go_cmd = {
 
 static uint32_t handle_info(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_args_out, uint8_t *resp_data_out)
 {
+	if (last_print_state != CMD_INFO) {
+		picowota_printf("info cmd\n");
+		last_print_state = CMD_INFO;
+	}
+
 	resp_args_out[0] = WRITE_ADDR_MIN;
 	resp_args_out[1] = (XIP_BASE + PICO_FLASH_SIZE_BYTES) - WRITE_ADDR_MIN;
 	resp_args_out[2] = FLASH_SECTOR_SIZE;
@@ -532,6 +593,11 @@ static uint32_t size_reboot(uint32_t *args_in, uint32_t *data_len_out, uint32_t 
 
 static uint32_t handle_reboot(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_args_out, uint8_t *resp_data_out)
 {
+	if (last_print_state != CMD_REBOOT) {
+		picowota_printf("reboot cmd\n");
+		last_print_state = CMD_REBOOT;
+	}
+
 	struct event ev = {
 		.type = EVENT_TYPE_REBOOT,
 		.reboot = {
@@ -564,38 +630,38 @@ static bool should_stay_in_bootloader()
 	return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
 }
 
-int __attribute__((weak)) picowota_network_init()
+int __attribute__((weak)) picowota_init(void)
 {
 	if (cyw43_arch_init()) {
-		DBG_PRINTF("failed to initialise\n");
+		picowota_printf("failed to initialise\n");
 		return 1;
 	}
 
 #if PICOWOTA_WIFI_AP == 1
 	cyw43_arch_enable_ap_mode(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK);
-	DBG_PRINTF("Enabled the WiFi AP.\n");
+	picowota_printf("Enabled the WiFi AP.\n");
 
 	ip4_addr_t gw, mask;
 	IP4_ADDR(&gw, 192, 168, 4, 1);
 	IP4_ADDR(&mask, 255, 255, 255, 0);
 
 	dhcp_server_init(&dhcp_server, &gw, &mask);
-	DBG_PRINTF("Started the DHCP server.\n");
+	picowota_printf("Started the DHCP server.\n");
 #else
 	cyw43_arch_enable_sta_mode();
 
-	DBG_PRINTF("Connecting to WiFi...\n");
+	picowota_printf("Connecting to WiFi...\n");
 	if (cyw43_arch_wifi_connect_timeout_ms(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-		DBG_PRINTF("failed to connect.\n");
+		picowota_printf("failed to connect.\n");
 		return 1;
 	} else {
-		DBG_PRINTF("Connected.\n");
+		picowota_printf("Connected.\n");
 	}
 #endif
 	return 0;
 }
 
-void __attribute__((weak)) picowota_network_deinit()
+void __attribute__((weak)) picowota_deinit(void)
 {
 #if PICOWOTA_WIFI_AP == 1
 	dhcp_server_deinit(&dhcp_server);
@@ -625,12 +691,13 @@ int main()
 		jump_to_vtor(vtor);
 	}
 
-	DBG_PRINTF_INIT();
+	picowota_printf_init();
 
 	queue_init(&event_queue, sizeof(struct event), EVENT_QUEUE_LENGTH);
 
-	int n = picowota_network_init();
+	int n = picowota_init();
 	if (n != 0) {
+		picowota_printf("init error %d\n", n);
 		return n;
 	}
 
@@ -663,18 +730,22 @@ int main()
 			case EVENT_TYPE_SERVER_DONE:
 				err = tcp_comm_listen(tcp, TCP_PORT);
 				if (err != ERR_OK) {
-					DBG_PRINTF("Failed to start server: %d\n", err);
+					picowota_printf("Failed to start server: %d\n", err);
+				} else {
+					picowota_printf("Listening on port %d\n", TCP_PORT);
 				}
 				break;
 			case EVENT_TYPE_REBOOT:
+				picowota_printf("reboot\n");
 				tcp_comm_server_close(tcp);
-				picowota_network_deinit();
+				picowota_deinit();
 				picowota_reboot(ev.reboot.to_bootloader);
 				/* Should never get here */
 				break;
 			case EVENT_TYPE_GO:
+				picowota_printf("go\n");
 				tcp_comm_server_close(tcp);
-				picowota_network_deinit();
+				picowota_deinit();
 				disable_interrupts();
 				reset_peripherals();
 				jump_to_vtor(ev.go.vtor);
@@ -686,6 +757,6 @@ int main()
 		picowota_poll();
 	}
 
-	picowota_network_deinit();
+	picowota_deinit();
 	return 0;
 }
