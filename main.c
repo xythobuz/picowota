@@ -421,14 +421,14 @@ struct image_header {
 };
 static_assert(sizeof(struct image_header) == FLASH_PAGE_SIZE, "image_header must be FLASH_PAGE_SIZE bytes");
 
-static bool image_header_ok(struct image_header *hdr)
+static bool image_header_ok(struct image_header *hdr, bool check_crc)
 {
 	uint32_t *vtor = (uint32_t *)hdr->vtor;
 
 	uint32_t calc = calc_crc32((void *)hdr->vtor, hdr->size);
 
-	// CRC has to match
-	if (calc != hdr->crc) {
+	// CRC has to match after flashing
+	if (check_crc && (calc != hdr->crc)) {
 		return false;
 	}
 
@@ -465,7 +465,7 @@ static uint32_t handle_seal(uint32_t *args_in, uint8_t *data_in, uint32_t *resp_
 		return TCP_COMM_RSP_ERR;
 	}
 
-	if (!image_header_ok(&hdr)) {
+	if (!image_header_ok(&hdr, true)) {
 		return TCP_COMM_RSP_ERR;
 	}
 
@@ -684,7 +684,7 @@ int main()
 
 	sleep_ms(10);
 
-	if (!should_stay_in_bootloader() && image_header_ok(&app_image_header)) {
+	if (!should_stay_in_bootloader() && image_header_ok(&app_image_header, false)) {
 		uint32_t vtor = *(uint32_t *)IMAGE_HEADER_ADDR;
 		disable_interrupts();
 		reset_peripherals();
