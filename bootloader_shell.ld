@@ -22,15 +22,27 @@
 */
 
 /*
+ * TODO hard-coded.
+ * Should take into account PICO_FLASH_BANK_STORAGE_OFFSET
+ * and DISK_BLOCK_SIZE and DISK_BLOCK_COUNT from config.h
+ */
+__PERSISTENT_STORAGE_LEN = (3 * 4k);
+__FLASH_CACHE_LEN = (48 * 4k);
+__ADDITIONAL_LEN = (__PERSISTENT_STORAGE_LEN + __FLASH_CACHE_LEN);
+
+/*
  * TODO: Hard-code 360k, which is the max size I see on my machine with
  * 'sta' mode and debug printf.
  * There must be a better way to determine the size dynamically somehow.
  */
+__BOOTLOADER_LEN = 360k;
+__IMG_HDR_LEN = 4k;
+__BOOTLOADER_IMG_LEN = (__BOOTLOADER_LEN + __IMG_HDR_LEN);
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 360k
-    FLASH_IMGHDR(rx) : ORIGIN = 0x10000000 + 360k, LENGTH = 4k
-    FLASH_APP(rx) : ORIGIN = 0x10000000 + 364k, LENGTH = 2048k - 364k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = __BOOTLOADER_LEN
+    FLASH_IMGHDR(rx) : ORIGIN = 0x10000000 + __BOOTLOADER_LEN, LENGTH = __IMG_HDR_LEN
+    FLASH_APP(rx) : ORIGIN = 0x10000000 + __BOOTLOADER_IMG_LEN, LENGTH = 2048k - __ADDITIONAL_LEN - __BOOTLOADER_IMG_LEN
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k

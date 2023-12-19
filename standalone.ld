@@ -21,10 +21,25 @@
     __stack (== StackTop)
 */
 
+INPUT (./fat_fs.o)
+
+/*
+ * TODO hard-coded.
+ * Should take into account PICO_FLASH_BANK_STORAGE_OFFSET
+ * and DISK_BLOCK_SIZE and DISK_BLOCK_COUNT from config.h
+ */
+__PERSISTENT_STORAGE_LEN = (3 * 4k);
+__FLASH_CACHE_LEN = (48 * 4k);
+__ADDITIONAL_LEN = (__PERSISTENT_STORAGE_LEN + __FLASH_CACHE_LEN);
+
 /* Skip 364kB at the start of flash, that's where the bootloader is */
+__BOOTLOADER_LEN = 360k;
+__IMG_HDR_LEN = 4k;
+__BOOTLOADER_IMG_LEN = (__BOOTLOADER_LEN + __IMG_HDR_LEN);
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000 + 364k, LENGTH = 2048k - 364k
+    FLASH(rx) : ORIGIN = 0x10000000 + __BOOTLOADER_IMG_LEN, LENGTH = 2048k - __ADDITIONAL_LEN - __BOOTLOADER_IMG_LEN
+    FLASH_CACHE(r) : ORIGIN = 0x10000000 + __BOOTLOADER_IMG_LEN + (2048k - __ADDITIONAL_LEN - __BOOTLOADER_IMG_LEN) , LENGTH = __FLASH_CACHE_LEN
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -212,6 +227,10 @@ SECTIONS
     {
         *(.stack*)
     } > SCRATCH_Y
+
+    .fat_fs_bin : {
+        KEEP(./fat_fs.o (.fat_fs_bin))
+    } > FLASH_CACHE
 
     .flash_end : {
         __flash_binary_end = .;
